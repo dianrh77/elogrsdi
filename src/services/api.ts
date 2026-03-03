@@ -1,7 +1,7 @@
 import { User, Barang, Transaksi } from '../types';
 
 // GANTI URL DI BAWAH INI dengan Web App URL dari Google Apps Script Anda
-const API_URL = 'https://script.google.com/macros/s/AKfycbxvxT7qyKAS-F8Rd17WRDZNcyFY8sj-DWyIzLCKaCBjBAC8x9Yw0_QBPiFjoUCHPazTZQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzECVstN6R0sajDw_aduSLjrY72Q7Zcw1Prab6GTxKWgVWUD2EoYLQsR81uh7k5EVdBGQ/exec';
 
 export async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET', body: any = null) {
   const url = `${API_URL}?action=${action}&_t=${Date.now()}`;
@@ -22,6 +22,10 @@ export async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET',
     const response = await fetch(url, options);
     const text = await response.text();
     
+    if (!response.ok) {
+      throw new Error(`HTTP Error ${response.status}: ${text.slice(0, 100)}`);
+    }
+
     try {
       const result = JSON.parse(text);
       if (result.status === 'error') {
@@ -29,11 +33,11 @@ export async function apiRequest(action: string, method: 'GET' | 'POST' = 'GET',
       }
       return result.data;
     } catch (e: any) {
-      if (e.message.startsWith('Server Error:')) {
+      if (e.message.startsWith('Server Error:') || e.message.startsWith('HTTP Error')) {
         throw e;
       }
       console.error('Failed to parse JSON:', text);
-      throw new Error('Respon dari server tidak valid. Pastikan Apps Script sudah di-deploy dengan benar.');
+      throw new Error('Respon dari server tidak valid (bukan JSON). Pastikan Apps Script sudah di-deploy sebagai Web App dan URL-nya benar.');
     }
   } catch (err: any) {
     console.error('API Request failed:', err);
@@ -66,4 +70,12 @@ export async function updateTerimaBarang(payload: any) {
 
 export async function updateSettings(payload: any) {
   return await apiRequest('updateSettings', 'POST', payload);
+}
+
+export async function updatePOQty(iddetil: string, poQty: number) {
+  return await apiRequest('updatePOQty', 'POST', { iddetil, poQty });
+}
+
+export async function finalizePO(items: { iddetil: string; poQty: number }[]) {
+  return await apiRequest('finalizePO', 'POST', { items });
 }

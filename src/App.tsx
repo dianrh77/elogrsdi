@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, AlertCircle, LogOut } from 'lucide-react';
 import { User, Barang, Transaksi, CartItem, OrderGroup, PendingSyncItem } from './types';
-import { getInitialData, submitOrder as submitOrderApi, updateApproval as updateApprovalApi, updateMasterBarang as updateMasterBarangApi, updateTerimaBarang as updateTerimaBarangApi, updateSettings as updateSettingsApi } from './services/api';
+import { getInitialData, submitOrder as submitOrderApi, updateApproval as updateApprovalApi, updateMasterBarang as updateMasterBarangApi, updateTerimaBarang as updateTerimaBarangApi, updateSettings as updateSettingsApi, updatePOQty as updatePOQtyApi, finalizePO as finalizePOApi } from './services/api';
 import { Navbar } from './components/Navbar';
 import { Login } from './components/Login';
 import { POS } from './components/POS';
@@ -16,6 +16,7 @@ import { AdminReportView } from './components/AdminReportView';
 import { AdminMonitoringView } from './components/AdminMonitoringView';
 import { AdminEfficiencyReportView } from './components/AdminEfficiencyReportView';
 import { AdminSettingsView } from './components/AdminSettingsView';
+import { AdminPOAdjustmentView } from './components/AdminPOAdjustmentView';
 
 export default function App() {
   const [view, setView] = useState('login');
@@ -72,6 +73,27 @@ export default function App() {
           JmlTerima: jmlTerima, 
           TanggalTerima: tanggalTerima 
         } : t);
+      } else if (item.type === 'updatePO') {
+        const { iddetil, poQty } = item.payload;
+        result = result.map(t => String(t.iddetil) === String(iddetil) ? { 
+          ...t, 
+          POQty: poQty,
+          Subtotal: t.Harga * poQty
+        } : t);
+      } else if (item.type === 'finalizePO') {
+        const { items } = item.payload;
+        result = result.map(t => {
+          const update = items.find((i: any) => String(i.iddetil) === String(t.iddetil));
+          if (update) {
+            return { 
+              ...t, 
+              StatusPO: 'FINALIZED',
+              POQty: update.poQty,
+              Subtotal: t.Harga * update.poQty
+            };
+          }
+          return t;
+        });
       }
     });
 
@@ -395,18 +417,29 @@ export default function App() {
     setPendingSync([...pendingSync, newItem]);
   };
 
+  const handleFinalizePO = (items: { iddetil: string; poQty: number }[]) => {
+    const newItem: PendingSyncItem = {
+      id: 'SYNC-' + Date.now(),
+      type: 'finalizePO',
+      payload: { items },
+      timestamp: Date.now(),
+      description: `Finalize PO for ${items.length} items`
+    };
+    setPendingSync([...pendingSync, newItem]);
+  };
+
   const handleSyncAll = async () => {
     if (pendingSync.length === 0 || syncing) return;
     setSyncing(true);
     setSyncProgress(0);
     setError(null);
     
-    const items = [...pendingSync];
-    const failed: PendingSyncItem[] = [];
-    const total = items.length;
+    const currentSyncItems = [...pendingSync];
+    const succeededIds: string[] = [];
+    const total = currentSyncItems.length;
 
     for (let i = 0; i < total; i++) {
-      const item = items[i];
+      const item = currentSyncItems[i];
       try {
         if (item.type === 'submitOrder') {
           await submitOrderApi(item.payload.data, item.payload.isUpdate, item.payload.deletedIds, item.payload.idOrder);
@@ -418,22 +451,29 @@ export default function App() {
           await updateMasterBarangApi(item.payload);
         } else if (item.type === 'updateSettings') {
           await updateSettingsApi(item.payload);
+        } else if (item.type === 'finalizePO') {
+          await finalizePOApi(item.payload.items);
         }
+        succeededIds.push(item.id);
         setSyncProgress(Math.round(((i + 1) / total) * 100));
-      } catch (err) {
+      } catch (err: any) {
         console.error('Sync failed for item:', item, err);
-        failed.push(item);
+        // Continue to next item
       }
     }
 
-    setPendingSync(failed);
-    if (failed.length > 0) {
-      setError(`${failed.length} item gagal disinkronisasi. Silakan coba lagi.`);
-      setSyncing(false);
-      setSyncProgress(0);
+    // Functional update to avoid race conditions with items added during sync
+    setPendingSync(prev => prev.filter(item => !succeededIds.includes(item.id)));
+    
+    const failedCount = total - succeededIds.length;
+    if (failedCount > 0) {
+      setError(`${failedCount} item gagal disinkronisasi. Silakan periksa koneksi internet atau URL Apps Script Anda, lalu coba lagi.`);
     } else {
       await fetchData(true);
     }
+    
+    setSyncing(false);
+    setSyncProgress(0);
   };
 
   const handleLogout = () => {
@@ -714,6 +754,15 @@ export default function App() {
             {view === 'admin_po' && <AdminPOView transaksi={displayTransaksi} barang={displayBarang} />}
             {view === 'admin_report' && <AdminReportView transaksi={displayTransaksi} users={userList} barang={displayBarang} />}
             {view === 'admin_efficiency' && <AdminEfficiencyReportView transaksi={displayTransaksi} users={userList} />}
+            {view === 'admin_po_adjustment' && (
+              <AdminPOAdjustmentView
+                transaksi={displayTransaksi}
+                onFinalizePO={handleFinalizePO}
+                loading={syncing}
+                pendingSyncCount={pendingSync.length}
+                onSync={handleSyncAll}
+              />
+            )}
             {view === 'admin_all_history' && (
               <AdminMonitoringView
                 transaksi={displayTransaksi}
@@ -738,6 +787,7 @@ export default function App() {
         onApprove={(id, selectedIds) => handleApproval(id, 'APPROVED', selectedIds)}
         onReject={(id) => handleApproval(id, 'TOLAK')}
         loading={syncing}
+        allTransaksi={displayTransaksi}
       />
 
       {/* Logout Confirmation Modal */}

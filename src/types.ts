@@ -31,6 +31,8 @@ export interface Transaksi {
   JmlTerima?: number;
   SESUAI?: string;
   TanggalTerima?: string;
+  POQty?: number;
+  StatusPO?: string;
 }
 
 export interface CartItem extends Barang {
@@ -48,7 +50,7 @@ export interface OrderGroup {
 
 export interface PendingSyncItem {
   id: string;
-  type: 'submitOrder' | 'updateApproval' | 'updateTerimaBarang' | 'updateMasterBarang' | 'updateSettings';
+  type: 'submitOrder' | 'updateApproval' | 'updateTerimaBarang' | 'updateMasterBarang' | 'updateSettings' | 'updatePO' | 'finalizePO';
   payload: any;
   timestamp: number;
   description: string;

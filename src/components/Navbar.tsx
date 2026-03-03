@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LogOut, RefreshCw, Loader2, ChevronDown, Package, ClipboardList, BarChart3, Menu, X } from 'lucide-react';
+import { LogOut, RefreshCw, Loader2, ChevronDown, Package, ClipboardList, BarChart3, Menu, X, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User } from '../types';
 
@@ -63,11 +63,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         ]
       },
       {
+        id: 'purchase_order',
+        label: 'Purchase Order',
+        icon: <FileText size={14} />,
+        items: [
+          { id: 'admin_po_adjustment', label: 'Finalisasi PO' },
+          { id: 'admin_po', label: 'Cetak PO' }
+        ]
+      },
+      {
         id: 'report',
         label: 'Report',
         icon: <BarChart3 size={14} />,
         items: [
-          { id: 'admin_po', label: 'Cetak PO' },
           { id: 'admin_report', label: 'Laporan' },
           { id: 'admin_efficiency', label: 'Rekap Per Unit' }
         ]
@@ -100,8 +108,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           <div className="hidden lg:flex items-center gap-2">
-            {categories.map((cat) => (
-              <div key={cat.id} className="relative">
+            {categories.map((cat, cIdx) => (
+              <div key={`cat-${cat.id}-${cIdx}`} className="relative">
                 <button
                   onClick={() => setActiveDropdown(activeDropdown === cat.id ? null : cat.id)}
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
@@ -123,9 +131,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                       exit={{ opacity: 0, y: 10, scale: 0.95 }}
                       className="absolute left-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden py-2"
                     >
-                      {cat.items.map((item) => (
+                      {cat.items.map((item, iIdx) => (
                         <button
-                          key={item.id}
+                          key={`item-${item.id}-${iIdx}`}
                           onClick={() => handleItemClick(item.id)}
                           className={`w-full text-left px-4 py-3 text-xs font-bold transition-all flex items-center justify-between ${
                             currentView === item.id 
@@ -187,16 +195,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="lg:hidden bg-white border-t border-slate-100 overflow-hidden"
           >
             <div className="p-4 space-y-6">
-              {categories.map((cat) => (
-                <div key={cat.id} className="space-y-2">
+              {categories.map((cat, cIdx) => (
+                <div key={`m-cat-${cat.id}-${cIdx}`} className="space-y-2">
                   <div className="flex items-center gap-2 px-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     {cat.icon}
                     {cat.label}
                   </div>
                   <div className="grid grid-cols-1 gap-1">
-                    {cat.items.map((item) => (
+                    {cat.items.map((item, iIdx) => (
                       <button
-                        key={item.id}
+                        key={`m-item-${item.id}-${iIdx}`}
                         onClick={() => handleItemClick(item.id)}
                         className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all ${
                           currentView === item.id 

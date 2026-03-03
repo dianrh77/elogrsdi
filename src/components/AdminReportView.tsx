@@ -121,8 +121,8 @@ export const AdminReportView: React.FC<AdminReportViewProps> = ({ transaksi, use
               className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-[10px] font-bold outline-none"
             >
               <option value="">SEMUA UNIT</option>
-              {units.map((u) => (
-                <option key={u} value={u}>
+              {units.map((u, idx) => (
+                <option key={`unit-${u}-${idx}`} value={u}>
                   {u}
                 </option>
               ))}
@@ -136,8 +136,8 @@ export const AdminReportView: React.FC<AdminReportViewProps> = ({ transaksi, use
               className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-[10px] font-bold outline-none"
             >
               <option value="">SEMUA VENDOR</option>
-              {vendors.map((v) => (
-                <option key={v} value={v}>
+              {vendors.map((v, idx) => (
+                <option key={`vendor-${v}-${idx}`} value={v}>
                   {v}
                 </option>
               ))}
@@ -233,11 +233,11 @@ export const AdminReportView: React.FC<AdminReportViewProps> = ({ transaksi, use
             Tidak ada data
           </div>
         ) : (
-          Object.keys(groupedData).map((key) => {
+          Object.keys(groupedData).map((key, kIdx) => {
             const data = groupedData[key];
             const rows = tab === 'vendor' ? Object.values(data.aggregated) : data.items;
             return (
-              <div key={key} className="mb-8">
+              <div key={`group-${key}-${kIdx}`} className="mb-8">
                 <div className="bg-slate-900 text-white px-4 py-2 flex justify-between items-center rounded-t-lg">
                   <h3 className="text-xs font-black uppercase tracking-widest">
                     {tab === 'vendor' ? 'VENDOR' : 'UNIT'}: {key}
@@ -256,7 +256,7 @@ export const AdminReportView: React.FC<AdminReportViewProps> = ({ transaksi, use
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((t: any, idx: number) => (
-                      <tr key={idx}>
+                      <tr key={`row-${t.iddetil || idx}`}>
                         <td className="px-4 py-2 text-slate-400 font-bold">{idx + 1}</td>
                         {tab !== 'vendor' && <td className="px-4 py-2 font-medium">{t.Tanggal}</td>}
                         {tab !== 'vendor' && (

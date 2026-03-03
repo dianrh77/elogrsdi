@@ -104,7 +104,7 @@ export const AdminMonitoringView: React.FC<AdminMonitoringViewProps> = ({ transa
               </tr>
             ) : (
               groups.map((g, idx) => (
-                <tr key={g.id || `mon-${idx}`}>
+                <tr key={`mon-${g.id}-${idx}`}>
                   <td className="px-6 py-2 text-[11px] font-black uppercase italic">{g.unit}</td>
                   <td className="px-6 py-2 text-[11px] font-bold text-slate-500">{g.tanggal}</td>
                   <td className="px-6 py-2 font-black text-slate-800 text-[11px]">{g.id}</td>

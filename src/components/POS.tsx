@@ -72,7 +72,7 @@ export const POS: React.FC<POSProps> = ({
                 </tr>
               ) : (
                 filteredItems.map((b, idx) => (
-                  <tr key={b.iddetil || b.id || `item-${idx}`} className="hover:bg-blue-50/30">
+                  <tr key={`item-${b.iddetil || b.id || idx}`} className="hover:bg-blue-50/30">
                     <td className="px-4 py-2.5">
                       <p className="font-bold text-slate-700 text-xs uppercase">{b.NamaBarang}</p>
                       <p className="text-[9px] text-slate-400 italic">
@@ -107,7 +107,7 @@ export const POS: React.FC<POSProps> = ({
               <p className="text-center text-slate-300 py-10 font-black text-[10px] uppercase">Keranjang Kosong</p>
             ) : (
               cart.map((c, idx) => (
-                <div key={c.iddetil || `cart-${idx}`} className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                <div key={`cart-${c.iddetil || idx}`} className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
                   <button
                     onClick={() => onRemoveFromCart(c.iddetil!)}
                     className="text-slate-300 hover:text-red-500 transition-colors shrink-0"

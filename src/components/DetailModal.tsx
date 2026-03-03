@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Loader2, CheckSquare, Square } from 'lucide-react';
-import { OrderGroup } from '../types';
+import { X, Loader2, CheckSquare, Square, History } from 'lucide-react';
+import { OrderGroup, Transaksi } from '../types';
 
 interface DetailModalProps {
   isOpen: boolean;
@@ -11,6 +11,7 @@ interface DetailModalProps {
   onApprove: (idOrder: string, selectedIds: string[]) => void;
   onReject: (idOrder: string) => void;
   loading: boolean;
+  allTransaksi: Transaksi[];
 }
 
 export const DetailModal: React.FC<DetailModalProps> = ({
@@ -21,8 +22,10 @@ export const DetailModal: React.FC<DetailModalProps> = ({
   onApprove,
   onReject,
   loading,
+  allTransaksi,
 }) => {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [viewHistoryItem, setViewHistoryItem] = useState<string | null>(null);
 
   useEffect(() => {
     if (group) {
@@ -93,10 +96,10 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {group.items.map((item, idx) => {
+                  {group.items.map((item, iIdx) => {
                     const isSelected = selectedItems.has(item.iddetil);
                     return (
-                      <tr key={item.iddetil || idx} className={isSelected ? '' : 'opacity-50'}>
+                      <tr key={`${item.iddetil}-${iIdx}`} className={isSelected ? '' : 'opacity-50'}>
                         {isAdmin && group.status.toLowerCase() === 'pending' && (
                           <td className="py-3">
                             <button onClick={() => toggleItem(item.iddetil)} className="p-1 hover:bg-slate-100 rounded">
@@ -108,8 +111,21 @@ export const DetailModal: React.FC<DetailModalProps> = ({
                             </button>
                           </td>
                         )}
-                        <td className="py-3 text-[10px] font-black text-slate-800 uppercase italic">
-                          {item.NamaBarang}
+                        <td className="py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-slate-800 uppercase italic">
+                              {item.NamaBarang}
+                            </span>
+                            {isAdmin && (
+                              <button
+                                onClick={() => setViewHistoryItem(item.NamaBarang)}
+                                className="p-1 text-slate-300 hover:text-blue-600 transition-colors"
+                                title="Lihat Riwayat 6 Bulan"
+                              >
+                                <History size={12} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 text-center text-[10px] font-bold">{item.Qty}</td>
                         <td className="py-3 text-right text-[10px] font-black text-blue-600">
@@ -154,6 +170,105 @@ export const DetailModal: React.FC<DetailModalProps> = ({
           </motion.div>
         </div>
       )}
+
+      {/* Item History Modal */}
+      <AnimatePresence>
+        {viewHistoryItem && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[2px]">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[70vh]"
+            >
+              <div className="p-5 border-b flex justify-between items-center bg-slate-50">
+                <div className="flex items-center gap-3">
+                  <div className="bg-blue-600 p-2 rounded-xl text-white">
+                    <History size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-slate-800 italic uppercase leading-none">{viewHistoryItem}</h4>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Riwayat 6 Bulan Terakhir ({group.unit})</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setViewHistoryItem(null)}
+                  className="p-2 text-slate-400 hover:text-red-500"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="flex-grow overflow-y-auto p-5 custom-scrollbar">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-[8px] font-black text-slate-400 uppercase tracking-widest border-b">
+                      <th className="pb-2">Tanggal</th>
+                      <th className="pb-2 text-center">Qty</th>
+                      <th className="pb-2 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {(() => {
+                      const now = new Date(2026, 2, 2); // Current metadata date
+                      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+                      
+                      const parseDate = (dateStr: string) => {
+                        const parts = dateStr.split('/');
+                        if (parts.length === 3) {
+                          return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+                        }
+                        return new Date(dateStr);
+                      };
+
+                      const history = allTransaksi
+                        .filter(t => 
+                          t.NamaBarang === viewHistoryItem && 
+                          t.Unit === group.unit &&
+                          parseDate(t.Tanggal) >= sixMonthsAgo
+                        )
+                        .sort((a, b) => parseDate(b.Tanggal).getTime() - parseDate(a.Tanggal).getTime());
+
+                      if (history.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={3} className="py-10 text-center text-[10px] font-black text-slate-300 uppercase italic">
+                              Tidak ada riwayat pemakaian
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return history.map((h, i) => (
+                        <tr key={`history-${h.iddetil}-${i}`} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-2 text-[9px] font-bold text-slate-500">{h.Tanggal}</td>
+                          <td className="py-2 text-[9px] font-black text-slate-800 text-center">{h.Qty}</td>
+                          <td className="py-2 text-right">
+                            <span className={`text-[8px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-full ${
+                              (h.ACC || '').toUpperCase() === 'APPROVED' 
+                                ? 'bg-emerald-50 text-emerald-600' 
+                                : 'bg-slate-50 text-slate-400'
+                            }`}>
+                              {h.ACC || 'PENDING'}
+                            </span>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+              <div className="p-5 border-t bg-slate-50 flex justify-end">
+                <button 
+                  onClick={() => setViewHistoryItem(null)}
+                  className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-[9px] tracking-widest uppercase"
+                >
+                  TUTUP
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </AnimatePresence>
   );
 };

@@ -184,14 +184,14 @@ export const AdminTerimaBarangView: React.FC<AdminTerimaBarangViewProps> = ({ tr
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {groups.map((g) => {
+          {groups.map((g, idx) => {
             const isExpanded = expandedOrder === g.id;
             const allOrderItemsSelected = g.items.every(item => selectedItems.has(item.iddetil));
             const someOrderItemsSelected = g.items.some(item => selectedItems.has(item.iddetil));
             
             return (
               <div
-                key={g.id}
+                key={`group-${g.id}-${idx}`}
                 className={`bg-white rounded-2xl border ${
                   isExpanded ? 'border-blue-500 shadow-lg ring-1 ring-blue-500/20' : 'border-slate-200'
                 } overflow-hidden transition-all duration-300`}
@@ -264,11 +264,11 @@ export const AdminTerimaBarangView: React.FC<AdminTerimaBarangViewProps> = ({ tr
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 italic">
-                          {g.items.map((item) => {
+                          {g.items.map((item, iIdx) => {
                             const input = terimaData[item.iddetil] || { sesuai: 'YA', jmlTerima: item.Qty };
                             const isSelected = selectedItems.has(item.iddetil);
                             return (
-                              <tr key={item.iddetil} className={isSelected ? 'bg-blue-50/30' : ''}>
+                              <tr key={`item-${item.iddetil}-${iIdx}`} className={isSelected ? 'bg-blue-50/30' : ''}>
                                 <td className="px-6 py-2">
                                   <div 
                                     className="cursor-pointer"

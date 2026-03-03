@@ -126,8 +126,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                 </td>
               </tr>
             ) : (
-              groups.map((g) => (
-                <tr key={g.id}>
+              groups.map((g, idx) => (
+                <tr key={`hist-${g.id}-${idx}`}>
                   <td className="px-6 py-2 font-black text-blue-600 text-[11px]">{g.id}</td>
                   <td className="px-6 py-2 text-[11px] font-bold text-slate-500">{g.tanggal}</td>
                   <td className="px-6 py-2 text-[11px] font-black text-right">

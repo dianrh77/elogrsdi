@@ -23,10 +23,11 @@ function doGet(e) {
         barang: getSheetData(ss, 'Barang'),
         user: getSheetData(ss, 'User'),
         transaksi: getSheetData(ss, 'Transaksi'),
-        settings: getSheetData(ss, 'Settings')
+        settings: getSettings(ss)
       });
     }
-    return responseError("Action GET tidak dikenal");
+    
+    return responseError('Action GET tidak dikenal');
   } catch (error) {
     return responseError(error.toString());
   }
@@ -34,66 +35,50 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const action = e.parameter.action;
     const payload = JSON.parse(e.postData.contents);
-    const action = payload.action;
-
-    // 1. SUBMIT ORDER (FIXED FOR UPDATE/REVISION)
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    
+    // 1. SUBMIT ORDER
     if (action === 'submitOrder') {
       const sheet = ss.getSheetByName('Transaksi');
-      const data = sheet.getDataRange().getValues();
-      const headers = data[0];
-      const colIdDetil = headers.indexOf('iddetil');
+      if (!sheet) return responseError("Sheet 'Transaksi' tidak ditemukan.");
       
-      if (colIdDetil === -1) return responseError("Kolom iddetil tidak ditemukan");
+      ensureHeaders(sheet, ['iddetil', 'Status PO', 'PO Qty', 'ACC', 'Jml ACC', 'Total ACC']);
+      const headers = sheet.getDataRange().getValues()[0];
+      const colIdDetil = findColumnIndex(headers, 'iddetil');
+      
+      const items = payload.data;
+      if (!items || !items.length) return responseSuccess('No data');
 
-      // Handle Deletions (Hapus item yang tidak ada lagi di keranjang saat revisi)
-      if (payload.deletedIds && payload.deletedIds.length > 0) {
-        let dataForDel = sheet.getDataRange().getValues();
-        const deletedIdsStr = payload.deletedIds.map(String);
-        for (let i = dataForDel.length - 1; i >= 1; i--) {
-          if (deletedIdsStr.includes(dataForDel[i][colIdDetil].toString())) {
-            sheet.deleteRow(i + 1);
-          }
-        }
-      }
-
-      // Ambil data terbaru setelah penghapusan
-      const currentData = sheet.getDataRange().getValues();
-
-      // Handle Updates and Additions
-      payload.data.forEach(row => {
+      items.forEach(function(row) {
         let foundRowIndex = -1;
-        for (let i = 1; i < currentData.length; i++) {
-          if (currentData[i][colIdDetil].toString() === row.iddetil.toString()) {
-            foundRowIndex = i + 1;
-            break;
+        if (colIdDetil !== -1 && row.iddetil) {
+          const currentData = sheet.getDataRange().getValues();
+          for (let i = 1; i < currentData.length; i++) {
+            if (currentData[i][colIdDetil].toString().trim() === row.iddetil.toString().trim()) {
+              foundRowIndex = i + 1;
+              break;
+            }
           }
         }
 
         if (foundRowIndex !== -1) {
-          // Update existing row
-          headers.forEach((header, colIdx) => {
-            const propName = header.toString().replace(/\s+/g, '');
-            if (row.hasOwnProperty(propName)) {
-              sheet.getRange(foundRowIndex, colIdx + 1).setValue(row[propName]);
-            }
+          headers.forEach(function(header, colIdx) {
+            const key = findKeyByHeader(row, header);
+            if (key !== null) sheet.getRange(foundRowIndex, colIdx + 1).setValue(row[key]);
           });
         } else {
-          // Append new row
-          const newRow = new Array(headers.length).fill("");
-          headers.forEach((header, colIdx) => {
-            const propName = header.toString().replace(/\s+/g, '');
-            if (row.hasOwnProperty(propName)) {
-              newRow[colIdx] = row[propName];
-            } else if (header === 'ACC') {
-              newRow[colIdx] = 'Pending';
-            }
+          const newRow = headers.map(function(header) {
+            const key = findKeyByHeader(row, header);
+            if (key !== null) return row[key];
+            if (header.toString().trim() === 'ACC') return 'Pending';
+            return '';
           });
           sheet.appendRow(newRow);
         }
       });
-      return responseSuccess('Order berhasil diperbarui');
+      return responseSuccess('Order berhasil diproses');
     }
 
     // 2. UPDATE APPROVAL
@@ -101,17 +86,16 @@ function doPost(e) {
       const sheet = ss.getSheetByName('Transaksi');
       const data = sheet.getDataRange().getValues();
       const headers = data[0];
-      const colId = headers.indexOf('iddetil');
-      const colAcc = headers.indexOf('ACC');
+      const colId = findColumnIndex(headers, 'iddetil');
+      const colAcc = findColumnIndex(headers, 'ACC');
       
       if (colId === -1 || colAcc === -1) return responseError("Kolom iddetil atau ACC tidak ditemukan");
 
       for (let i = 1; i < data.length; i++) {
-        if (data[i][colId].toString() === payload.iddetil.toString()) {
+        if (data[i][colId].toString().trim() === payload.iddetil.toString().trim()) {
           sheet.getRange(i + 1, colAcc + 1).setValue(payload.status);
-          // Jika ada kolom Jml ACC dan Total ACC, bisa diupdate di sini
-          const colJmlAcc = headers.indexOf('Jml ACC');
-          const colTotalAcc = headers.indexOf('Total ACC');
+          const colJmlAcc = findColumnIndex(headers, 'Jml ACC');
+          const colTotalAcc = findColumnIndex(headers, 'Total ACC');
           if (colJmlAcc !== -1) sheet.getRange(i + 1, colJmlAcc + 1).setValue(payload.jmlAcc || 0);
           if (colTotalAcc !== -1) sheet.getRange(i + 1, colTotalAcc + 1).setValue(payload.totalAcc || 0);
           break;
@@ -125,17 +109,17 @@ function doPost(e) {
       const sheet = ss.getSheetByName('Transaksi');
       const data = sheet.getDataRange().getValues();
       const headers = data[0];
+      const colId = findColumnIndex(headers, 'iddetil');
       
-      const colId = headers.indexOf('iddetil');
-      const colTerima = headers.indexOf('Terima Barang');
-      const colSesuai = headers.indexOf('SESUAI');
-      const colJmlTerima = headers.indexOf('Jml Terima');
-      const colTglTerima = headers.indexOf('Tanggal Terima');
-
       if (colId === -1) return responseError("Kolom iddetil tidak ditemukan");
 
       for (let i = 1; i < data.length; i++) {
-        if (data[i][colId].toString() === payload.iddetil.toString()) {
+        if (data[i][colId].toString().trim() === payload.iddetil.toString().trim()) {
+          const colTerima = findColumnIndex(headers, 'Terima Barang');
+          const colSesuai = findColumnIndex(headers, 'SESUAI');
+          const colJmlTerima = findColumnIndex(headers, 'Jml Terima');
+          const colTglTerima = findColumnIndex(headers, 'Tanggal Terima');
+
           if (colTerima !== -1) sheet.getRange(i + 1, colTerima + 1).setValue('YA');
           if (colSesuai !== -1) sheet.getRange(i + 1, colSesuai + 1).setValue(payload.sesuai);
           if (colJmlTerima !== -1) sheet.getRange(i + 1, colJmlTerima + 1).setValue(payload.jmlTerima);
@@ -149,25 +133,31 @@ function doPost(e) {
     // 4. UPDATE MASTER BARANG
     if (action === 'updateMasterBarang' || action === 'manageMasterBarang') {
       const sheet = ss.getSheetByName('Barang');
+      if (!sheet) return responseError("Sheet 'Barang' tidak ditemukan.");
       const data = sheet.getDataRange().getValues();
       const headers = data[0];
-      const colId = headers.indexOf('id');
+      const colId = findColumnIndex(headers, 'id');
       
       if (colId === -1) return responseError("Kolom id pada sheet Barang tidak ditemukan");
 
+      let found = false;
       for (let i = 1; i < data.length; i++) {
-        if (data[i][colId].toString() === payload.id.toString()) {
-          const colNama = headers.indexOf('Nama Barang');
-          const colHarga = headers.indexOf('Harga');
-          const colVendor = headers.indexOf('Vendor');
-          const colStatus = headers.indexOf('Status');
-          
-          if (colNama !== -1) sheet.getRange(i + 1, colNama + 1).setValue(payload.NamaBarang);
-          if (colHarga !== -1) sheet.getRange(i + 1, colHarga + 1).setValue(payload.Harga);
-          if (colVendor !== -1) sheet.getRange(i + 1, colVendor + 1).setValue(payload.Vendor);
-          if (colStatus !== -1) sheet.getRange(i + 1, colStatus + 1).setValue(payload.Status);
+        if (data[i][colId].toString().trim() === payload.id.toString().trim()) {
+          headers.forEach(function(h, idx) {
+            const key = findKeyByHeader(payload, h);
+            if (key !== null) sheet.getRange(i + 1, idx + 1).setValue(payload[key]);
+          });
+          found = true;
           break;
         }
+      }
+      
+      if (!found) {
+        const newRow = headers.map(function(h) {
+          const key = findKeyByHeader(payload, h);
+          return key !== null ? payload[key] : '';
+        });
+        sheet.appendRow(newRow);
       }
       return responseSuccess('Master Barang diperbarui');
     }
@@ -198,35 +188,128 @@ function doPost(e) {
       return responseSuccess('Pengaturan diperbarui');
     }
 
+    // 6. UPDATE PO QTY
+    if (action === 'updatePOQty') {
+      const sheet = ss.getSheetByName('Transaksi');
+      ensureHeaders(sheet, ['iddetil', 'PO Qty']);
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+      const colId = findColumnIndex(headers, 'iddetil');
+      const colPOQty = findColumnIndex(headers, 'PO Qty');
+      
+      if (colId === -1 || colPOQty === -1) return responseError("Kolom iddetil atau PO Qty tidak ditemukan");
+
+      for (let i = 1; i < data.length; i++) {
+        if (data[i][colId].toString().trim() === payload.iddetil.toString().trim()) {
+          sheet.getRange(i + 1, colPOQty + 1).setValue(payload.poQty);
+          break;
+        }
+      }
+      return responseSuccess('PO Qty diperbarui');
+    }
+
+    // 7. FINALIZE PO
+    if (action === 'finalizePO') {
+      const sheet = ss.getSheetByName('Transaksi');
+      ensureHeaders(sheet, ['iddetil', 'Status PO', 'PO Qty']);
+      const data = sheet.getDataRange().getValues();
+      const headers = data[0];
+      const colId = findColumnIndex(headers, 'iddetil');
+      const colStatusPO = findColumnIndex(headers, 'Status PO');
+      const colPOQty = findColumnIndex(headers, 'PO Qty');
+      
+      if (colId === -1 || colStatusPO === -1) return responseError("Kolom iddetil atau Status PO tidak ditemukan");
+
+      const items = payload.items;
+      const itemMap = {};
+      items.forEach(function(it) { itemMap[it.iddetil.toString().trim()] = it.poQty; });
+
+      for (let i = 1; i < data.length; i++) {
+        const id = data[i][colId].toString().trim();
+        if (itemMap.hasOwnProperty(id)) {
+          sheet.getRange(i + 1, colStatusPO + 1).setValue('FINALIZED');
+          if (colPOQty !== -1) sheet.getRange(i + 1, colPOQty + 1).setValue(itemMap[id]);
+        }
+      }
+      return responseSuccess('PO berhasil difinalisasi');
+    }
+
     return responseError('Action POST tidak dikenal: ' + action);
   } catch (error) {
     return responseError(error.toString());
   }
 }
 
+function ensureHeaders(sheet, essentialHeaders) {
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0] || [];
+  const normalizedHeaders = headers.map(function(h) { 
+    return h.toString().toLowerCase().replace(/\s+/g, ''); 
+  });
+  
+  let added = false;
+  essentialHeaders.forEach(function(h) {
+    const nh = h.toLowerCase().replace(/\s+/g, '');
+    if (normalizedHeaders.indexOf(nh) === -1) {
+      sheet.getRange(1, headers.length + 1).setValue(h);
+      headers.push(h);
+      normalizedHeaders.push(nh);
+      added = true;
+    }
+  });
+  if (added) SpreadsheetApp.flush();
+}
+
+function findKeyByHeader(item, header) {
+  const nh = header.toString().toLowerCase().replace(/\s+/g, '');
+  for (const key in item) {
+    if (key.toLowerCase().replace(/\s+/g, '') === nh) return key;
+  }
+  return null;
+}
+
+function findColumnIndex(headers, target) {
+  const normalizedTarget = target.toLowerCase().replace(/\s+/g, '');
+  for (let i = 0; i < headers.length; i++) {
+    const normalizedHeader = headers[i].toString().toLowerCase().replace(/\s+/g, '');
+    if (normalizedHeader === normalizedTarget) return i;
+  }
+  return -1;
+}
+
 function getSheetData(ss, sheetName) {
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
-  if (data.length < 1) return [];
   const headers = data[0];
-  return data.slice(1).map(row => {
-    let obj = {};
-    headers.forEach((header, i) => {
-      // Membersihkan spasi di header agar menjadi properti JS yang valid
-      let propName = header.toString().replace(/\s+/g, '');
-      obj[propName] = row[i];
+  const result = [];
+  for (let i = 1; i < data.length; i++) {
+    const obj = {};
+    headers.forEach((header, index) => {
+      obj[header.toString().replace(/\s+/g, '')] = data[i][index];
     });
-    return obj;
-  });
+    result.push(obj);
+  }
+  return result;
+}
+
+function getSettings(ss) {
+  const sheet = ss.getSheetByName('Settings');
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  const settings = [];
+  for (let i = 1; i < data.length; i++) {
+    settings.push({ key: data[i][0], value: data[i][1] });
+  }
+  return settings;
 }
 
 function responseSuccess(data) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'success', data: data }))
+  return ContentService.createTextOutput(JSON.stringify({ success: true, data: data }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function responseError(msg) {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: msg }))
+function responseError(message) {
+  return ContentService.createTextOutput(JSON.stringify({ success: false, message: message }))
     .setMimeType(ContentService.MimeType.JSON);
 }

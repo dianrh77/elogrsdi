@@ -9,7 +9,6 @@ interface AdminPOViewProps {
 
 export const AdminPOView: React.FC<AdminPOViewProps> = ({ transaksi, barang }) => {
   const [vendor, setVendor] = useState('');
-  const [status, setStatus] = useState('APPROVED');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -24,7 +23,11 @@ export const AdminPOView: React.FC<AdminPOViewProps> = ({ transaksi, barang }) =
 
   const filteredTrans = transaksi.filter((t) => {
     const tStatus = (t.ACC || 'Pending').toUpperCase();
-    if (status !== 'ALL' && tStatus !== status) return false;
+    const poStatus = (t.StatusPO || '').toUpperCase();
+    
+    // Only show items that are APPROVED and FINALIZED for PO
+    if (tStatus !== 'APPROVED' || poStatus !== 'FINALIZED') return false;
+    
     if (vendor && t.Vendor !== vendor) return false;
     const tDate = parseDate(t.Tanggal);
     if (!tDate) return false;
@@ -42,8 +45,11 @@ export const AdminPOView: React.FC<AdminPOViewProps> = ({ transaksi, barang }) =
     if (!grouped[t.NamaBarang]) {
       grouped[t.NamaBarang] = { NamaBarang: t.NamaBarang, Harga: t.Harga, Qty: 0, Subtotal: 0 };
     }
-    grouped[t.NamaBarang].Qty += Number(t.Qty);
-    grouped[t.NamaBarang].Subtotal += Number(t.Subtotal);
+    const hasPOQty = t.POQty !== undefined && t.POQty !== null && t.POQty !== "";
+    const qty = hasPOQty ? t.POQty : t.Qty;
+    const subtotal = hasPOQty ? t.Harga * Number(t.POQty) : t.Subtotal;
+    grouped[t.NamaBarang].Qty += Number(qty);
+    grouped[t.NamaBarang].Subtotal += Number(subtotal);
   });
 
   const poItems = Object.values(grouped);
@@ -123,20 +129,7 @@ export const AdminPOView: React.FC<AdminPOViewProps> = ({ transaksi, barang }) =
             CETAK SEKARANG
           </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-4 border-t pt-4 border-slate-100">
-          <div>
-            <label className="text-[8px] font-black text-slate-400 uppercase mb-1 block">Filter Status</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-[10px] font-bold outline-none"
-            >
-              <option value="ALL">SEMUA STATUS</option>
-              <option value="APPROVED">APPROVED</option>
-              <option value="PENDING">PENDING</option>
-              <option value="TOLAK">DITOLAK</option>
-            </select>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 border-t pt-4 border-slate-100">
           <div>
             <label className="text-[8px] font-black text-slate-400 uppercase mb-1 block">Filter Vendor</label>
             <select
@@ -145,8 +138,8 @@ export const AdminPOView: React.FC<AdminPOViewProps> = ({ transaksi, barang }) =
               className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-[10px] font-bold outline-none"
             >
               <option value="">SEMUA VENDOR</option>
-              {vendors.map((v) => (
-                <option key={v} value={v}>
+              {vendors.map((v, idx) => (
+                <option key={`vendor-${v}-${idx}`} value={v}>
                   {v}
                 </option>
               ))}
@@ -220,13 +213,21 @@ export const AdminPOView: React.FC<AdminPOViewProps> = ({ transaksi, barang }) =
             <tbody className="border-x border-slate-200 divide-y divide-slate-100">
               {poItems.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-slate-300 font-black text-xs uppercase">
-                    Tidak ada data untuk filter ini
+                  <td colSpan={4} className="px-4 py-16 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="bg-slate-50 p-4 rounded-full text-slate-300">
+                        <Printer size={32} />
+                      </div>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest max-w-xs leading-relaxed">
+                        Tidak ada data PO yang siap cetak. <br/>
+                        Pastikan Anda sudah melakukan <span className="text-blue-600">Finalisasi PO</span> di menu <span className="italic">Finalisasi PO</span> terlebih dahulu.
+                      </p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 poItems.map((item, idx) => (
-                  <tr key={item.NamaBarang || idx}>
+                  <tr key={`po-item-${item.NamaBarang}-${idx}`}>
                     <td className="px-4 py-2 text-xs font-bold text-slate-400">{idx + 1}</td>
                     <td className="px-4 py-2 text-sm font-black text-slate-900 uppercase">{item.NamaBarang}</td>
                     <td className="px-4 py-2 text-center text-sm font-black text-slate-900">{item.Qty}</td>
